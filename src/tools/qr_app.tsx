@@ -105,8 +105,8 @@ function QRAppInner({ app, toolResult, hostContext }: any) {
       <button onClick={handleGenerateQR}>Generate QR</button>
 
       {qr && (
-        <div style={{ marginTop: 20 }}>
-          <img src={qr} alt="QR Code" style={{ width: 200 }} />
+        <div className={styles.qrContainer} >
+          <img  className={styles.qrImage} src={qr} alt="QR Code"  />
         </div>
       )}
     </main>
