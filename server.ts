@@ -3,52 +3,72 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
 import path from "node:path";
+import QRCode from "qrcode"
+import { z } from "zod";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "dist")
   : import.meta.dirname;
 
-/**
- * Creates a new MCP server instance with tools and resources registered.
- */
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: "Basic MCP App Server (React)",
+    name: "QR MCP App Server",
     version: "1.0.0",
   });
 
-  // Two-part registration: tool + resource, tied together by the resource URI.
-  const resourceUri = "ui://get-time/mcp-app.html";
+  // 🔁 nuevo resource URI
+  const resourceUri = "ui://generate-qr/mcp-app.html";
 
-  // Register a tool with UI metadata. When the host calls this tool, it reads
-  // `_meta.ui.resourceUri` to know which resource to fetch and render as an
-  // interactive UI.
-  registerAppTool(server,
-    "get-time",
-    {
-      title: "Get Time",
-      description: "Returns the current server time as an ISO 8601 string.",
-      inputSchema: {},
-      _meta: { ui: { resourceUri } }, // Links this tool to its UI resource
-    },
-    async (): Promise<CallToolResult> => {
-      const time = new Date().toISOString();
-      return { content: [{ type: "text", text: time }] };
-    },
-  );
+  // ✅ NUEVA TOOL
+registerAppTool(
+  server,
+  "generate-qr",
+  {
+    title: "Generate QR",
+    description: "Generates a QR code from officeId and deviceId",
+    inputSchema: z.object({
+      officeId: z.string(),
+      deviceId: z.string(),
+    }),
+    _meta: { ui: { resourceUri } },
+  },
+  async ({ officeId, deviceId }): Promise<CallToolResult> => {
+    const payload = JSON.stringify({ officeId, deviceId });
+    const qr = await QRCode.toDataURL(payload);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ qr }),
+        },
+      ],
+    };
+  }
+);
 
-  // Register the resource, which returns the bundled HTML/JavaScript for the UI.
-  registerAppResource(server,
+  // 📦 UI RESOURCE
+  registerAppResource(
+    server,
     resourceUri,
     resourceUri,
     { mimeType: RESOURCE_MIME_TYPE },
     async (): Promise<ReadResourceResult> => {
-      const html = await fs.readFile(path.join(DIST_DIR, "mcp-app.html"), "utf-8");
+      const html = await fs.readFile(
+        path.join(DIST_DIR, "mcp-app.html"),
+        "utf-8"
+      );
+
       return {
-        contents: [{ uri: resourceUri, mimeType: RESOURCE_MIME_TYPE, text: html }],
+        contents: [
+          {
+            uri: resourceUri,
+            mimeType: RESOURCE_MIME_TYPE,
+            text: html,
+          },
+        ],
       };
-    },
+    }
   );
 
   return server;
