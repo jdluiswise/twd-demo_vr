@@ -4,7 +4,7 @@ import {
 } from "@modelcontextprotocol/ext-apps/react";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { useEffect, useState } from "react";
-import styles from "./qr_app.module.css";
+import styles from "./styles.module.css";
 
 function extractQRData(result: CallToolResult) {
   const item = result.content?.find((c) => c.type === "text");
