@@ -1,17 +1,18 @@
-import type {  McpUiHostContext } from "@modelcontextprotocol/ext-apps";
+import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { useApp } from "@modelcontextprotocol/ext-apps/react";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import styles from "./qr_app.module.css";
 
+// Extrae el QR del resultado del servidor de forma segura
 function extractQR(result: CallToolResult): string | null {
   const item = result.content?.find((c) => c.type === "text");
   if (!item) return null;
 
   try {
     const parsed = JSON.parse(item.text);
-    return parsed.qr;
+    return typeof parsed.qr === "string" ? parsed.qr : null;
   } catch {
     return null;
   }
@@ -25,15 +26,10 @@ function QRApp() {
     appInfo: { name: "QR Generator App", version: "1.0.0" },
     capabilities: {},
     onAppCreated: (app) => {
-      app.ontoolresult = async (result) => {
-        setToolResult(result);
-      };
-
+      app.ontoolresult = async (result) => setToolResult(result);
       app.onerror = console.error;
-
-      app.onhostcontextchanged = (params) => {
+      app.onhostcontextchanged = (params) =>
         setHostContext((prev) => ({ ...prev, ...params }));
-      };
     },
   });
 
@@ -44,14 +40,26 @@ function QRApp() {
   if (error) return <div>Error: {error.message}</div>;
   if (!app) return <div>Connecting...</div>;
 
-  return <QRAppInner app={app} toolResult={toolResult} hostContext={hostContext} />;
+  return (
+    <QRAppInner app={app} toolResult={toolResult} hostContext={hostContext} />
+  );
 }
 
-function QRAppInner({ app, toolResult, hostContext }: any) {
+interface QRAppInnerProps {
+  app: ReturnType<typeof useApp>["app"] | null; // <-- puede ser null
+  toolResult: CallToolResult | null;
+  hostContext?: McpUiHostContext;
+}
+
+function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
   const [officeId, setOfficeId] = useState("");
   const [deviceId, setDeviceId] = useState("");
   const [qr, setQr] = useState<string | null>(null);
 
+  // Limpiar QR previo si cambian inputs
+  useEffect(() => setQr(null), [officeId, deviceId]);
+
+  // Actualizar QR al recibir resultado del servidor
   useEffect(() => {
     if (toolResult) {
       const qrData = extractQR(toolResult);
@@ -60,34 +68,34 @@ function QRAppInner({ app, toolResult, hostContext }: any) {
   }, [toolResult]);
 
   const handleGenerateQR = useCallback(async () => {
+    if (!app) return; // <-- chequeo de seguridad
     try {
       const result = await app.callServerTool({
         name: "generate-qr",
-        arguments: {
-          officeId,
-          deviceId,
-        },
+        arguments: { officeId, deviceId },
       });
-
       const qrData = extractQR(result);
       if (qrData) setQr(qrData);
     } catch (e) {
-      console.error(e);
+      console.error("QR generation failed:", e);
     }
   }, [app, officeId, deviceId]);
+
+  if (!app) return <div>Connecting...</div>; // <-- opcional, mientras app es null
 
   return (
     <main
       className={styles.main}
       style={{
-        paddingTop: hostContext?.safeAreaInsets?.top,
-        paddingBottom: hostContext?.safeAreaInsets?.bottom,
+        paddingTop: hostContext?.safeAreaInsets?.top ?? 8,
+        paddingBottom: hostContext?.safeAreaInsets?.bottom ?? 8,
       }}
     >
       <h2>QR Generator</h2>
 
       <div className={styles.action}>
         <input
+          className={styles.input}
           placeholder="officeId"
           value={officeId}
           onChange={(e) => setOfficeId(e.target.value)}
@@ -96,17 +104,20 @@ function QRAppInner({ app, toolResult, hostContext }: any) {
 
       <div className={styles.action}>
         <input
+          className={styles.input}
           placeholder="deviceId"
           value={deviceId}
           onChange={(e) => setDeviceId(e.target.value)}
         />
       </div>
 
-      <button onClick={handleGenerateQR}>Generate QR</button>
+      <button className={styles.button} onClick={handleGenerateQR}>
+        Generate QR
+      </button>
 
       {qr && (
-        <div className={styles.qrContainer} >
-          <img  className={styles.qrImage} src={qr} alt="QR Code"  />
+        <div className={styles.qrContainer}>
+          <img className={styles.qrImage} src={qr} alt="QR Code" />
         </div>
       )}
     </main>
