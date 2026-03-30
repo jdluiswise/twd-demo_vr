@@ -1,86 +1,57 @@
-import type { McpUiHostContext } from "@modelcontextprotocol/ext-apps";
-import { useApp } from "@modelcontextprotocol/ext-apps/react";
+import {
+  useApp,
+  type McpUiHostContext,
+} from "@modelcontextprotocol/ext-apps/react";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { StrictMode, useCallback, useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { useEffect, useState } from "react";
 import styles from "./qr_app.module.css";
 
-function extractQR(result: CallToolResult): string | null {
+function extractQRData(result: CallToolResult) {
   const item = result.content?.find((c) => c.type === "text");
   if (!item) return null;
 
   try {
     const parsed = JSON.parse(item.text);
-    return typeof parsed.qr === "string" ? parsed.qr : null;
+    return {
+      qr: typeof parsed.qr === "string" ? parsed.qr : null,
+      officeId: typeof parsed.officeId === "string" ? parsed.officeId : null,
+      deviceName: typeof parsed.deviceId === "string" ? parsed.deviceId : null,
+    };
   } catch {
     return null;
   }
 }
 
-function QRApp() {
+export default function QRApp() {
   const [toolResult, setToolResult] = useState<CallToolResult | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
+  const [officeId, setOfficeId] = useState<string | null>(null);
+  const [deviceName, setDeviceName] = useState<string | null>(null);
   const [hostContext, setHostContext] = useState<McpUiHostContext>();
 
   const { app, error } = useApp({
     appInfo: { name: "QR Generator App", version: "1.0.0" },
     capabilities: {},
     onAppCreated: (app) => {
-      app.ontoolresult = async (result) => setToolResult(result);
+      app.ontoolresult = (result) => setToolResult(result);
       app.onerror = console.error;
-      app.onhostcontextchanged = (params) =>
-        setHostContext((prev) => ({ ...prev, ...params }));
+      app.onhostcontextchanged = (ctx) => setHostContext(ctx);
     },
   });
 
   useEffect(() => {
-    if (app) setHostContext(app.getHostContext());
-  }, [app]);
-
-  if (error) return <div>Error: {error.message}</div>;
-  if (!app) return <div>Connecting...</div>;
-
-  return (
-    <QRAppInner app={app} toolResult={toolResult} hostContext={hostContext} />
-  );
-}
-
-interface QRAppInnerProps {
-  app: ReturnType<typeof useApp>["app"] | null;
-  toolResult: CallToolResult | null;
-  hostContext?: McpUiHostContext;
-}
-
-function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
-  const [officeId, setOfficeId] = useState("");
-  const [deviceId, setDeviceId] = useState("");
-  const [qr, setQr] = useState<string | null>(null);
-
-  useEffect(() => setQr(null), [officeId, deviceId]);
-
-  useEffect(() => {
     if (toolResult) {
-      const qrData = extractQR(toolResult);
-      if (qrData) setQr(qrData);
+      const data = extractQRData(toolResult);
+      if (!data) return;
+      setQr(data.qr);
+      setOfficeId(data.officeId);
+      setDeviceName(data.deviceName);
     }
   }, [toolResult]);
 
-  const handleGenerateQR = useCallback(async () => {
-    if (!app) return;
-    if (!officeId.trim() || !deviceId.trim()) return; 
-
-    try {
-      const result = await app.callServerTool({
-        name: "generate-qr",
-        arguments: { officeId, deviceId },
-      });
-      const qrData = extractQR(result);
-      if (qrData) setQr(qrData);
-    } catch (e) {
-      console.error("QR generation failed:", e);
-    }
-  }, [app, officeId, deviceId]);
-
-  if (!app) return <div>Connecting...</div>; 
+  if (error) return <div>Error: {error.message}</div>;
+  if (!app) return <div>Connecting...</div>;
+  if (!qr) return <div>Generando QR...</div>;
 
   return (
     <main
@@ -90,45 +61,20 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
         paddingBottom: hostContext?.safeAreaInsets?.bottom ?? 8,
       }}
     >
-      <h2>QR Generator</h2>
-
-      <div className={styles.action}>
-        <input
-          className={styles.input}
-          placeholder="officeId"
-          value={officeId}
-          onChange={(e) => setOfficeId(e.target.value)}
-        />
+      <div className={styles.qrContainer}>
+        <img className={styles.qrImage} src={qr} alt="QR Code" />
       </div>
 
-      <div className={styles.action}>
-        <input
-          className={styles.input}
-          placeholder="deviceId"
-          value={deviceId}
-          onChange={(e) => setDeviceId(e.target.value)}
-        />
+      <div className={styles.qrDetails}>
+        <ul>
+          <li>
+            <strong>Device Name:</strong> {deviceName}
+          </li>
+          <li>
+            <strong>Office ID:</strong> {officeId}
+          </li>
+        </ul>
       </div>
-
-      <button
-        className={styles.button}
-        onClick={handleGenerateQR}
-        disabled={!officeId.trim() || !deviceId.trim()}
-      >
-        Generate QR
-      </button>
-
-      {qr && (
-        <div className={styles.qrContainer}>
-          <img className={styles.qrImage} src={qr} alt="QR Code" />
-        </div>
-      )}
     </main>
   );
 }
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QRApp />
-  </StrictMode>,
-);
