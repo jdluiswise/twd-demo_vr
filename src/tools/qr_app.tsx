@@ -5,7 +5,6 @@ import { StrictMode, useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import styles from "./qr_app.module.css";
 
-// Extrae el QR del resultado del servidor de forma segura
 function extractQR(result: CallToolResult): string | null {
   const item = result.content?.find((c) => c.type === "text");
   if (!item) return null;
@@ -46,7 +45,7 @@ function QRApp() {
 }
 
 interface QRAppInnerProps {
-  app: ReturnType<typeof useApp>["app"] | null; // <-- puede ser null
+  app: ReturnType<typeof useApp>["app"] | null;
   toolResult: CallToolResult | null;
   hostContext?: McpUiHostContext;
 }
@@ -56,10 +55,8 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
   const [deviceId, setDeviceId] = useState("");
   const [qr, setQr] = useState<string | null>(null);
 
-  // Limpiar QR previo si cambian inputs
   useEffect(() => setQr(null), [officeId, deviceId]);
 
-  // Actualizar QR al recibir resultado del servidor
   useEffect(() => {
     if (toolResult) {
       const qrData = extractQR(toolResult);
@@ -68,7 +65,9 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
   }, [toolResult]);
 
   const handleGenerateQR = useCallback(async () => {
-    if (!app) return; // <-- chequeo de seguridad
+    if (!app) return;
+    if (!officeId.trim() || !deviceId.trim()) return; 
+
     try {
       const result = await app.callServerTool({
         name: "generate-qr",
@@ -81,7 +80,7 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
     }
   }, [app, officeId, deviceId]);
 
-  if (!app) return <div>Connecting...</div>; // <-- opcional, mientras app es null
+  if (!app) return <div>Connecting...</div>; 
 
   return (
     <main
@@ -111,7 +110,11 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
         />
       </div>
 
-      <button className={styles.button} onClick={handleGenerateQR}>
+      <button
+        className={styles.button}
+        onClick={handleGenerateQR}
+        disabled={!officeId.trim() || !deviceId.trim()}
+      >
         Generate QR
       </button>
 
@@ -127,5 +130,5 @@ function QRAppInner({ app, toolResult, hostContext }: QRAppInnerProps) {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QRApp />
-  </StrictMode>
+  </StrictMode>,
 );
